@@ -7,6 +7,7 @@ import json
 import os
 import sys
 
+from . import health, rental
 from .params import MethodParams
 
 
@@ -53,6 +54,8 @@ def format_summary(doc: dict) -> str:
                 lines.append(f"  telemetry {ph['name']:28s} power mean {s['power_w_mean']:.0f} W "
                              f"(limit {s['power_limit_w']:.0f})  temp max {s['temp_c_max']:.0f} C  "
                              f"SM clock {s['sm_clock_mhz_min']:.0f}-{s['sm_clock_mhz_max']:.0f} MHz")
+    lines.append("")
+    lines.append(health.format_findings(doc["health"]))
     return "\n".join(lines)
 
 
@@ -66,6 +69,12 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
                    help="override a method parameter (see `gpu-mark params`)")
     r.add_argument("--json-stdout", action="store_true", help="also print the result JSON to stdout")
+    rental.add_arguments(r)
+    c = sub.add_parser("check", help="inventory and health checks only; no benchmark, no torch, a few seconds")
+    c.add_argument("--provider", required=True, help="who supplies the machine; recorded as given")
+    c.add_argument("--out", required=True, help="path of the JSON result file to write")
+    c.add_argument("--json-stdout", action="store_true", help="also print the result JSON to stdout")
+    rental.add_arguments(c)
     sub.add_parser("params", help="print the method parameters and their reasons")
     i = sub.add_parser("inference", help="serve an LLM with vLLM and measure throughput (needs `vllm` on PATH)")
     i.add_argument("--provider", required=True, help="who supplies the machine; recorded as given")
@@ -74,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
     i.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
                    help="override an inference parameter (see `gpu-mark inference-params`)")
     i.add_argument("--json-stdout", action="store_true", help="also print the result JSON to stdout")
+    rental.add_arguments(i)
     sub.add_parser("inference-params", help="print the inference parameters and their reasons")
     args = ap.parse_args(argv)
 
@@ -84,12 +94,24 @@ def main(argv: list[str] | None = None) -> int:
         from .inference_params import InferenceParams
         print(json.dumps(InferenceParams().as_dict(), indent=2))
         return 0
+    if args.cmd == "check":
+        from . import check
+        doc = check.run(args.provider, rental.from_args(args))
+        with open(args.out, "w") as f:
+            json.dump(doc, f, indent=1)
+        print(check.format_summary(doc))
+        print(f"\nresult file: {args.out}")
+        if args.json_stdout:
+            print("GPU_MARK_JSON_BEGIN")
+            print(json.dumps(doc, separators=(",", ":")))
+            print("GPU_MARK_JSON_END")
+        return 0
     if args.cmd == "inference":
         os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
         from . import inference
         from .inference_params import InferenceParams
         ip = InferenceParams().with_values(**_parse_set(args.set))
-        doc = inference.run(args.provider, ip, args.out, args.server_log)
+        doc = inference.run(args.provider, ip, args.out, args.server_log, rental.from_args(args))
         print(inference.format_summary(doc))
         print(f"\nresult file: {args.out}")
         if args.json_stdout:
@@ -105,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = MethodParams().with_values(**_parse_set(args.set))
     gpus = [int(x) for x in args.gpus.split(",")] if args.gpus else None
-    doc = runner.run(args.provider, p, gpus)
+    doc = runner.run(args.provider, p, gpus, rental.from_args(args))
     with open(args.out, "w") as f:
         json.dump(doc, f, indent=1)
     print(format_summary(doc))

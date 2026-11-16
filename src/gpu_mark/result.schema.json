@@ -60,6 +60,29 @@
         "fp32_math_mode": {"type": "object"}
       }
     },
+    "rental": {
+      "type": ["object", "null"],
+      "required": ["instance_id", "region", "price_usd_per_hour", "price_source", "rental_started_at", "not_given"],
+      "properties": {
+        "price_usd_per_hour": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "not_given": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "health": {
+      "type": "object",
+      "required": ["flagged", "findings", "raw"],
+      "properties": {
+        "flagged": {"type": "array", "items": {"type": "string"}},
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["check", "gpu_uuid", "status", "observed", "expected", "reason"],
+            "properties": {"status": {"enum": ["ok", "flag", "unavailable", "not_checked"]}}
+          }
+        }
+      }
+    },
     "inventory": {
       "type": "object",
       "required": ["host", "driver", "software", "gpus", "compute_processes_at_start"],
