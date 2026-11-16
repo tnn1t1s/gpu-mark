@@ -108,14 +108,19 @@ def extract_bench(raw: dict) -> tuple[dict, list[str]]:
 
 
 LOG_TAIL_LINES = 40  # last lines of the server log kept, so a startup failure keeps its final exception
+LOG_ERROR_LINES = 40  # last ERROR lines kept; the engine process logs its root cause there
 
 
 def log_evidence(log_text: str) -> dict:
     all_lines = log_text.splitlines()
     lines = [ln.strip() for ln in all_lines if LOG_EVIDENCE.search(ln)]
     m = KV_GIB.findall(log_text)
+    # vLLM's engine process logs its root cause as ERROR lines well before the
+    # API server's own traceback, which fills the tail; keep those lines too.
+    errors = [ln.strip() for ln in all_lines
+              if " ERROR " in ln and not ln.rstrip().endswith("^") and '  File "' not in ln]
     return {"kv_cache_gib": float(m[-1]) if m else None, "lines": lines[:60],
-            "tail": all_lines[-LOG_TAIL_LINES:]}
+            "errors": errors[-LOG_ERROR_LINES:], "tail": all_lines[-LOG_TAIL_LINES:]}
 
 
 class Server:

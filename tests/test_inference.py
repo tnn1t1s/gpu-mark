@@ -58,6 +58,16 @@ def test_log_evidence_keeps_lines_and_kv_size():
     assert ev["kv_cache_gib"] == 57.83
     assert len(ev["lines"]) == 2
     assert ev["tail"][-1] == "noise"
+    assert ev["errors"] == []
+
+
+def test_log_evidence_keeps_engine_error_lines():
+    log = ('(EngineCore pid=1) ERROR 11-16 [core.py:1584] RuntimeError: Ninja build failed\n'
+           '(EngineCore pid=1) ERROR 11-16 [core.py:1584]   File "/x/y.py", line 3, in f\n'
+           '(EngineCore pid=1) ERROR 11-16 [core.py:1584]     ^^^^^^^^^^\n'
+           'RuntimeError: Engine core initialization failed\n')
+    ev = inference.log_evidence(log)
+    assert ev["errors"] == ["(EngineCore pid=1) ERROR 11-16 [core.py:1584] RuntimeError: Ninja build failed"]
 
 
 def test_inference_params_command(capsys):
