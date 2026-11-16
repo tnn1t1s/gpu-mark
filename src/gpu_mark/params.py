@@ -142,7 +142,8 @@ NOT_IMPLEMENTED = [
     {"name": "gpu_to_gpu_bandwidth", "reason": "Peer-to-peer copy between GPUs is out of scope for v1."},
     {"name": "nccl_allreduce_broadcast", "reason": "NCCL collectives are out of scope for v1."},
     {"name": "cluster_network", "reason": "Multi-node network test is out of scope for v1."},
-    {"name": "inference_and_finetuning", "reason": "LLM inference and fine-tuning tests are out of scope for v1."},
+    {"name": "finetuning", "reason": "Fine-tuning throughput is out of scope. LLM inference is a separate "
+     "command, `gpu-mark inference`, with its own result file."},
     {"name": "health_audit", "reason": "Memory test, DCGM diagnostics and XID scan are out of scope for v1."},
     {"name": "thermal_check", "reason": "The separate heat-and-cool check is unspecified in public sources."},
     {"name": "peer_tier_grading", "reason": "Grading needs a same-model population of results; none exists yet."},

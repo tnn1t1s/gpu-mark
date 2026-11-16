@@ -67,11 +67,36 @@ def main(argv: list[str] | None = None) -> int:
                    help="override a method parameter (see `gpu-mark params`)")
     r.add_argument("--json-stdout", action="store_true", help="also print the result JSON to stdout")
     sub.add_parser("params", help="print the method parameters and their reasons")
+    i = sub.add_parser("inference", help="serve an LLM with vLLM and measure throughput (needs `vllm` on PATH)")
+    i.add_argument("--provider", required=True, help="who supplies the machine; recorded as given")
+    i.add_argument("--out", required=True, help="path of the JSON result file, rewritten after each level")
+    i.add_argument("--server-log", help="path for the vLLM server log; default a temporary directory")
+    i.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
+                   help="override an inference parameter (see `gpu-mark inference-params`)")
+    i.add_argument("--json-stdout", action="store_true", help="also print the result JSON to stdout")
+    sub.add_parser("inference-params", help="print the inference parameters and their reasons")
     args = ap.parse_args(argv)
 
     if args.cmd == "params":
         print(json.dumps(MethodParams().as_dict(), indent=2))
         return 0
+    if args.cmd == "inference-params":
+        from .inference_params import InferenceParams
+        print(json.dumps(InferenceParams().as_dict(), indent=2))
+        return 0
+    if args.cmd == "inference":
+        os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
+        from . import inference
+        from .inference_params import InferenceParams
+        ip = InferenceParams().with_values(**_parse_set(args.set))
+        doc = inference.run(args.provider, ip, args.out, args.server_log)
+        print(inference.format_summary(doc))
+        print(f"\nresult file: {args.out}")
+        if args.json_stdout:
+            print("GPU_MARK_JSON_BEGIN")
+            print(json.dumps(doc, separators=(",", ":")))
+            print("GPU_MARK_JSON_END")
+        return 1 if any("fatal" in e for e in doc["errors"]) else 0
 
     # nvidia-smi numbers GPUs by PCI bus id. CUDA must use the same order so
     # inventory and results describe the same GPU; it reads this at init.
