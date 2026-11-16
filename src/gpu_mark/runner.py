@@ -10,7 +10,7 @@ import uuid as uuidlib
 
 import torch
 
-from . import __version__, bench, inventory, metrics, telemetry
+from . import __version__, bench, health, inventory, metrics, telemetry
 from .params import NOT_IMPLEMENTED, MethodParams
 
 SCHEMA_VERSION = "1"
@@ -226,7 +226,7 @@ def _match_smi_index(torch_indices: list[int], gpus_smi: list[dict]) -> dict:
     return out
 
 
-def run(provider: str, p: MethodParams, gpu_indices: list[int] | None = None) -> dict:
+def run(provider: str, p: MethodParams, gpu_indices: list[int] | None = None, rental: dict | None = None) -> dict:
     if not provider:
         raise ValueError("provider is required")
     order = os.environ.get("CUDA_DEVICE_ORDER")
@@ -255,6 +255,8 @@ def run(provider: str, p: MethodParams, gpu_indices: list[int] | None = None) ->
         "gpus": gpus_smi,
         "compute_processes_at_start": inventory.compute_processes(),
     }
+    doc["rental"] = rental
+    doc["health"] = health.snapshot(gpus_smi, doc["inventory"]["compute_processes_at_start"])
 
     count = torch.cuda.device_count()
     indices = gpu_indices if gpu_indices is not None else list(range(count))

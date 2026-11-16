@@ -27,7 +27,7 @@ import time
 import urllib.request
 import uuid as uuidlib
 
-from . import __version__, inventory, telemetry
+from . import __version__, health, inventory, telemetry
 from .inference_params import InferenceParams, requests_for
 
 SCHEMA_VERSION = "1"
@@ -199,7 +199,8 @@ def resolve_model(p: InferenceParams) -> str:
     return snapshot_download(p.value("model"), revision=p.value("model_revision"))
 
 
-def run(provider: str, p: InferenceParams, out_path: str, server_log: str | None = None) -> dict:
+def run(provider: str, p: InferenceParams, out_path: str, server_log: str | None = None,
+        rental: dict | None = None) -> dict:
     if not provider:
         raise ValueError("provider is required")
     vllm = shutil.which("vllm")
@@ -233,10 +234,12 @@ def run(provider: str, p: InferenceParams, out_path: str, server_log: str | None
             "gpus": gpus,
             "compute_processes_at_start": inventory.compute_processes(),
         },
+        "rental": rental,
         "server": {},
         "results": {"levels": []},
         "errors": [],
     }
+    doc["health"] = health.snapshot(gpus, doc["inventory"]["compute_processes_at_start"])
 
     def checkpoint():
         with open(out_path, "w") as f:
@@ -349,6 +352,8 @@ def format_summary(doc: dict) -> str:
         lines.append(f"  {lv['name']:20s} {lv['requests']:5d} {f('output_throughput', 10)} "
                      f"{f('total_token_throughput', 12)} {f('median_ttft_ms', 12)} {f('median_tpot_ms', 12)} "
                      f"{m.get('failed', '-')!s:>6s}")
+    lines.append("")
+    lines.append(health.format_findings(doc["health"]))
     for e in doc["errors"]:
         lines.append(f"error: {json.dumps(e)[:300]}")
     return "\n".join(lines)

@@ -8,7 +8,7 @@ import pytest
 torch = pytest.importorskip("torch")
 jsonschema = pytest.importorskip("jsonschema")
 
-from gpu_mark import bench, cli, runner  # noqa: E402
+from gpu_mark import bench, cli, health, runner  # noqa: E402
 from gpu_mark.params import NOT_IMPLEMENTED, MethodParams  # noqa: E402
 
 SMALL = dict(matmul_n=64, matmul_warmup_iters=1, matmul_timed_iters=2, d2d_copy_bytes=1 << 16,
@@ -54,6 +54,11 @@ def _document(per_gpu_entry, p):
         },
         "telemetry": {"source": "nvidia-smi", "interval_ms": 500, "samples": [], "sampler_errors": [],
                       "phases": [{**ph, "summary": {}} for ph in []]},
+        "rental": None,
+        "health": health.evaluate([{"uuid": "GPU-x", "ecc_mode": "Enabled", "mig_mode": "Disabled",
+                                    "power_limit_w": "400", "power_default_limit_w": "400"}], [],
+                                  {"rows": [], "error": "not read in a CPU test"},
+                                  {"lines": None, "error": "not read in a CPU test"}),
         "not_implemented": NOT_IMPLEMENTED,
         "errors": [],
     }
