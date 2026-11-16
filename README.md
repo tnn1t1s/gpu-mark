@@ -17,6 +17,20 @@ into the result file. gpu-mark numbers compare cleanly with each other;
 comparing them with another tool's numbers means holding the parameter table
 below against that tool's method.
 
+## Purpose
+
+gpu-mark exists to reproduce published GPU benchmark results first, and to
+publish its own measurements only after that. A reproduction runs the
+published method as closely as the paper allows, lines the numbers up against
+the paper's tables, and records every place where the method had to guess.
+New benchmarks go into gpu-mark only once the reproduction they build on
+holds. Each reproduction is tracked as a GitHub issue that lists the paper's
+claims one by one and marks each as reproduced, contradicted or not testable,
+with the reason.
+
+Raw result files identify the machine they ran on, so they don't belong in
+this repository. It holds the code, the method and aggregated tables.
+
 ## Running it
 
 gpu-mark needs Linux, an NVIDIA driver with `nvidia-smi` on the path, and a
@@ -28,6 +42,19 @@ libraries.
 pip install --no-deps git+https://github.com/tnn1t1s/gpu-mark
 gpu-mark run --provider <who supplies the machine> --out result.json
 ```
+
+On a host with no PyTorch installed, [uv](https://docs.astral.sh/uv/) can
+supply one for the run without touching the system Python. The PyPI torch
+wheel for Linux x86_64 bundles its CUDA libraries and needs several GB of
+disk.
+
+```sh
+uv run --with torch --with git+https://github.com/tnn1t1s/gpu-mark \
+  gpu-mark run --provider <provider> --out result.json
+```
+
+On a small container disk, set `UV_LINK_MODE=symlink` so uv links the
+environment to its cache instead of copying the torch files a second time.
 
 Without installing, from a checkout:
 
@@ -47,6 +74,35 @@ files.
 The run makes no network call and reads no credential. Most of its time goes
 to the FP32 matrix multiply, which runs on the CUDA cores at a small fraction
 of tensor-core speed.
+
+## Example output
+
+The summary printed at the end of a single-GPU run on an
+NVIDIA A100-SXM4-80GB (UUID removed):
+
+```
+gpu-mark 0.1.0  provider=runpod  duration=56.9s
+driver 595.91.07  torch 2.15.0+cu132  CUDA 13.2  cuDNN 92600
+
+GPU 0  NVIDIA A100-SXM4-80GB
+  metric                                 median        min        max  unit (n=5)
+  matmul_fp32_tflops                       19.1       19.1       19.1  TFLOPS
+  matmul_fp16_tflops                      260.6      259.9      263.0  TFLOPS
+  matmul_bf16_tflops                      267.1      265.6      269.9  TFLOPS
+  d2d_copy_read_plus_write_gbps          1730.9     1688.5     1742.3  GB/s (bytes read + bytes written)
+  d2d_copy_each_byte_once_gbps            865.5      844.3      871.2  GB/s (copy size counted once)
+  h2d_pinned_gbps                          18.4       18.3       18.6  GB/s
+  d2h_pinned_gbps                          16.0       16.0       16.1  GB/s
+  matmul_fp8_tflops                  skipped: not supported: compute capability (8, 0) is below (8, 9)
+
+All-GPU pass skipped: 1 GPU(s) below all_gpu_pass_min_gpus=2
+  telemetry gpu0:matmul_fp32_tflops      power mean 352 W (limit 400)  temp max 61 C  SM clock 1155-1410 MHz
+  telemetry gpu0:matmul_fp16_tflops      power mean 202 W (limit 400)  temp max 58 C  SM clock 1155-1410 MHz
+  telemetry gpu0:matmul_bf16_tflops      power mean 240 W (limit 400)  temp max 58 C  SM clock 1155-1410 MHz
+  telemetry gpu0:host_copy               power mean 120 W (limit 400)  temp max 50 C  SM clock 1410-1410 MHz
+```
+
+The full result is a JSON document described under [Result file](#result-file).
 
 ## What it measures
 
@@ -72,7 +128,9 @@ the same GPU and reports the result two ways:
   written, so each copied byte counts twice. The GPGPU '26 paper's figures
   fit this convention: its best H200 figure is 4,213 GB/s, and counting each
   byte once would put the memory traffic at about 8.4 TB/s, above the
-  H200's 4.8 TB/s specification.
+  H200's 4.8 TB/s specification. An A100-SXM4-80GB points the same way: its
+  read-plus-write figure falls inside the paper's A100 SXM4 80GB range of
+  1,459 to 1,759 GB/s, while its each-byte-once figure falls far below it.
 - `d2d_copy_each_byte_once_gbps` counts the copy size once, half the first
   figure.
 
