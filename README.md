@@ -75,6 +75,37 @@ The run makes no network call and reads no credential. Most of its time goes
 to the FP32 matrix multiply, which runs on the CUDA cores at a small fraction
 of tensor-core speed.
 
+## LLM inference test
+
+`gpu-mark inference` serves `nvidia/Llama-3.1-Nemotron-Nano-4B-v1.1` with vLLM
+at its default settings in bf16, and drives it with `vllm bench serve`. It runs
+the Chat workload (128 input and 128 output tokens) and the Summarization
+workload (4,096 in, 512 out), each at 1, 25, 50 and 100 requests in flight. The
+workloads and levels come from Slynko et al., GPGPU '26, section 2.2. Every
+choice that paper leaves open is a parameter with its reason;
+`gpu-mark inference-params` prints them. The result records output and total
+tokens per second, time to first token, time per output token, the KV cache
+size vLLM reports, prefix-cache hits and GPU telemetry for each level.
+
+It needs one GPU with about 70 GiB of memory, `vllm` on the path, and about
+30 GB of disk for vLLM, its kernels and the model weights. vLLM also needs a C
+compiler and Python headers on the host, because Triton compiles a launcher
+when the server starts. Without `nvcc` on the host, vLLM also needs
+FlashInfer's precompiled kernels, which FlashInfer publishes on its own package
+index rather than on PyPI:
+
+```sh
+uv run --python 3.12 --with vllm==0.33.0 \
+  --index https://flashinfer.ai/whl --index https://flashinfer.ai/whl/cu130 \
+  --with flashinfer-cubin==0.7.2.post1 \
+  --with flashinfer-jit-cache==0.7.2.post1+cu130 \
+  --with git+https://github.com/tnn1t1s/gpu-mark \
+  gpu-mark inference --provider <provider> --out result.json
+```
+
+The kernel package versions must match the `flashinfer-python` version that
+vLLM installs, and the `cu130` label must match torch's CUDA version.
+
 ## Example output
 
 The summary printed at the end of a single-GPU run on an
@@ -233,7 +264,7 @@ before publishing a result if that matters to you.
 - GPU-to-GPU bandwidth, and NCCL all-reduce and broadcast, on multi-GPU
   machines.
 - Network tests between machines.
-- LLM inference and fine-tuning throughput.
+- Fine-tuning throughput.
 - Health checks: GPU memory tests, DCGM diagnostics, XID log scans, and a
   separate sustained-load thermal check.
 - Grading a GPU against other GPUs of the same model. That needs a population
