@@ -74,7 +74,7 @@ def _http(url: str, body: dict | None = None, timeout: float = 10.0) -> tuple[in
 
 
 def bench_args(vllm: str, p: InferenceParams, base_url: str, tokenizer: str, workload: dict,
-               concurrency: int, result_dir: str, result_file: str) -> list[str]:
+               concurrency: int, result_dir: str, result_file: str, prompt_seed: int) -> list[str]:
     return [
         vllm, "bench", "serve",
         "--backend", "vllm",
@@ -92,7 +92,7 @@ def bench_args(vllm: str, p: InferenceParams, base_url: str, tokenizer: str, wor
         "--max-concurrency", str(concurrency),
         "--request-rate", "inf",
         "--num-warmups", str(p.value("warmup_requests")),
-        "--seed", str(p.value("seed")),
+        "--seed", str(prompt_seed),
         "--percentile-metrics", "ttft,tpot,itl,e2el",
         "--metric-percentiles", "50,99",
         "--disable-tqdm",
@@ -109,6 +109,18 @@ def extract_bench(raw: dict) -> tuple[dict, list[str]]:
 
 LOG_TAIL_LINES = 40  # last lines of the server log kept, so a startup failure keeps its final exception
 LOG_ERROR_LINES = 40  # last ERROR lines kept; the engine process logs its root cause there
+
+
+def prefix_cache_counters(base_url: str) -> dict[str, float]:
+    """vLLM's prefix-cache counters from /metrics, summed over label sets."""
+    _, body = _http(base_url + "/metrics")
+    out: dict[str, float] = {}
+    for ln in body.decode().splitlines():
+        if ln.startswith("vllm:prefix_cache_"):
+            name, _, val = ln.rpartition(" ")
+            key = name.split("{", 1)[0]
+            out[key] = out.get(key, 0.0) + float(val)
+    return out
 
 
 def log_evidence(log_text: str) -> dict:
@@ -217,7 +229,7 @@ def run(provider: str, p: InferenceParams, out_path: str, server_log: str | None
             "driver": inventory.nvidia_smi_driver(),
             "software": {**inventory.torch_versions(),
                          **{d: _version(d) for d in ("vllm", "transformers", "flashinfer-python",
-                                                      "flashinfer-cubin", "triton", "huggingface-hub")}},
+                                                      "flashinfer-cubin", "flashinfer-jit-cache", "triton", "huggingface-hub")}},
             "gpus": gpus,
             "compute_processes_at_start": inventory.compute_processes(),
         },
@@ -247,17 +259,26 @@ def run(provider: str, p: InferenceParams, out_path: str, server_log: str | None
                 doc["server"]["log_evidence"] = log_evidence(f.read())
             checkpoint()
 
+            level_index = 0
             for wname, wl in p.value("workloads").items():
                 for c in p.value("concurrency_levels"):
                     name = f"{wname}_c{c}"
                     fname = f"{name}.json"
-                    args = bench_args(vllm, p, server.base_url, model_path, wl, c, work, fname)
+                    # A distinct prompt seed per level keeps vLLM's prefix cache from
+                    # serving one level's prompts out of an earlier level's KV blocks.
+                    prompt_seed = p.value("seed") + level_index
+                    level_index += 1
+                    args = bench_args(vllm, p, server.base_url, model_path, wl, c, work, fname, prompt_seed)
+                    cache_before = prefix_cache_counters(server.base_url)
                     t = time.time()
                     proc = subprocess.run(args, capture_output=True, text=True)
                     end = time.time()
+                    cache_after = prefix_cache_counters(server.base_url)
                     phases.append({"name": name, "start": t, "end": end})
                     level = {"name": name, "workload": wname, **wl, "concurrency": c,
-                             "requests": requests_for(p, c), "wall_s": round(end - t, 2)}
+                             "requests": requests_for(p, c), "prompt_seed": prompt_seed,
+                             "wall_s": round(end - t, 2),
+                             "prefix_cache_delta": {k: cache_after.get(k, 0.0) - v for k, v in cache_before.items()}}
                     if proc.returncode != 0:
                         doc["errors"].append({"level": name, "returncode": proc.returncode,
                                               "output_tail": (proc.stdout + proc.stderr)[-3000:]})
@@ -269,6 +290,9 @@ def run(provider: str, p: InferenceParams, out_path: str, server_log: str | None
                             doc["errors"].append({"level": name, "missing_bench_fields": missing})
                     doc["results"]["levels"].append(level)
                     checkpoint()
+                    # One line per finished level, so a long run shows progress in the job log.
+                    print(f"{_now()} level {name} done: wall {level['wall_s']} s, "
+                          f"output tok/s {level.get('metrics', {}).get('output_throughput')}", flush=True)
                     if server.proc.poll() is not None:
                         raise RuntimeError(f"vllm serve exited with code {server.proc.returncode} during {name}")
         except Exception as e:  # recorded in the result; the CLI exits non-zero

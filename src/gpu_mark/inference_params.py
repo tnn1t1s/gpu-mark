@@ -79,7 +79,14 @@ class InferenceParams:
         10, "requests", "default",
         "Untimed requests sent before each level's timed requests.",
     )
-    seed: Param = _p(0, "seed", "default", "Seed for the random prompts and for the server.")
+    seed: Param = _p(
+        0, "seed", "default",
+        "Server seed, and base of the prompt seeds: level k (counting chat levels first, then "
+        "summarization, in concurrency order) draws its random prompts with seed + k. One seed for "
+        "every level repeats the same prompts across levels, and vLLM's default prefix cache then "
+        "skips their prefill; the first A100 run showed this as falling summarization throughput "
+        "past 25 concurrent requests.",
+    )
     server_ready_timeout_s: Param = _p(
         1200, "s", "default",
         "Time allowed for vLLM to load the weights, compile, capture CUDA graphs and complete one "

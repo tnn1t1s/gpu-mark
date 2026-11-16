@@ -38,8 +38,9 @@ def test_override_and_unknown():
 def test_bench_args_carry_workload_and_concurrency():
     p = InferenceParams()
     a = inference.bench_args("vllm", p, "http://127.0.0.1:1", "/m", {"input_tokens": 4096, "output_tokens": 512},
-                             50, "/r", "x.json")
+                             50, "/r", "x.json", 7)
     s = " ".join(a)
+    assert "--seed 7" in s
     for frag in ("--random-input-len 4096", "--random-output-len 512", "--max-concurrency 50",
                  "--num-prompts 250", "--random-range-ratio 0", "--ignore-eos", "--tokenizer /m",
                  "--model nvidia/Llama-3.1-Nemotron-Nano-4B-v1.1"):
