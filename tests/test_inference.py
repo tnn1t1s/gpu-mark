@@ -73,3 +73,12 @@ def test_log_evidence_keeps_engine_error_lines():
 def test_inference_params_command(capsys):
     assert cli.main(["inference-params"]) == 0
     assert "concurrency_levels" in json.loads(capsys.readouterr().out)
+
+
+def test_summarize_phase_rejects_str_index():
+    import pytest
+    from gpu_mark import telemetry
+    samples = [{"index": 0, "t": 1.0, "power_w": 100.0}]
+    assert telemetry.summarize_phase(samples, 0, 0.0, 2.0)["n_samples"] == 1
+    with pytest.raises(TypeError):
+        telemetry.summarize_phase(samples, "0", 0.0, 2.0)

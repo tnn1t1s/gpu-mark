@@ -281,7 +281,7 @@ def run(provider: str, p: InferenceParams, out_path: str, server_log: str | None
                         doc["server"]["log_evidence"] = log_evidence(f.read())
             doc["server"]["log_path"] = log_path
 
-    gpu_index = gpus[0]["index"]
+    gpu_index = int(gpus[0]["index"])  # inventory keeps nvidia-smi text; telemetry samples hold int
     doc["telemetry"] = {
         "source": "nvidia-smi",
         "interval_ms": p.value("telemetry_interval_ms"),

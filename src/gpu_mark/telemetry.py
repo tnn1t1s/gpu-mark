@@ -86,6 +86,9 @@ class Sampler:
 
 def summarize_phase(samples: list[dict], gpu_index: int, start: float, end: float) -> dict:
     """Summary of one GPU's samples taken between start and end (host epoch seconds)."""
+    if not isinstance(gpu_index, int):
+        # Samples carry an int index; a str index would silently match nothing.
+        raise TypeError(f"gpu_index must be int, got {type(gpu_index).__name__}")
     rows = [s for s in samples if s["index"] == gpu_index and start <= s["t"] <= end]
 
     def vals(k):
