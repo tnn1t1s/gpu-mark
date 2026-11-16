@@ -1,0 +1,30 @@
+[project]
+name = "gpu-mark"
+version = "0.1.0"
+description = "Single-node GPU benchmark: matmul TFLOPS per precision, memory copy and host-link bandwidth, with inventory and telemetry."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+# torch is required to run the benchmark. It is optional at install time
+# because GPU hosts usually ship a CUDA build of torch that must not be
+# replaced by a generic wheel. The dev group installs a CPU build for the tests.
+torch = ["torch>=2.1"]
+
+[project.scripts]
+gpu-mark = "gpu_mark.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "jsonschema>=4", "torch>=2.1"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gpu_mark"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

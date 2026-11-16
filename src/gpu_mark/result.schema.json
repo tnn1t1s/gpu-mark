@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tnn1t1s/gpu-mark/result.schema.json",
+  "title": "gpu-mark result, schema version 1",
+  "type": "object",
+  "required": ["schema_version", "tool", "run", "method", "inventory", "results", "telemetry", "not_implemented", "errors"],
+  "$defs": {
+    "param": {
+      "type": "object",
+      "required": ["value", "unit", "kind", "reason"],
+      "properties": {
+        "unit": {"type": "string"},
+        "kind": {"enum": ["source", "default", "override"]},
+        "reason": {"type": "string"}
+      }
+    },
+    "metric": {
+      "type": "object",
+      "required": ["unit", "samples", "median", "min", "max", "n"],
+      "properties": {
+        "unit": {"type": "string"},
+        "samples": {"type": "array", "items": {"type": "number"}, "minItems": 1},
+        "median": {"type": "number"},
+        "min": {"type": "number"},
+        "max": {"type": "number"},
+        "n": {"type": "integer", "minimum": 1}
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "propertyNames": {"pattern": "^(matmul_(fp32|fp16|bf16|fp8)_tflops|d2d_copy_(read_plus_write|each_byte_once)_gbps|(h2d|d2h)_pinned_gbps)$"},
+      "additionalProperties": {"$ref": "#/$defs/metric"}
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "1"},
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {"name": {"const": "gpu-mark"}, "version": {"type": "string"}}
+    },
+    "run": {
+      "type": "object",
+      "required": ["run_id", "started_at", "ended_at", "duration_s", "provider", "cuda_device_order"],
+      "properties": {
+        "run_id": {"type": "string"},
+        "started_at": {"type": "string"},
+        "ended_at": {"type": "string"},
+        "duration_s": {"type": "number"},
+        "provider": {"type": "string", "minLength": 1},
+        "cuda_device_order": {"const": "PCI_BUS_ID"},
+        "cuda_visible_devices": {"type": ["string", "null"]}
+      }
+    },
+    "method": {
+      "type": "object",
+      "required": ["parameters", "fp32_math_mode"],
+      "properties": {
+        "parameters": {"type": "object", "additionalProperties": {"$ref": "#/$defs/param"}},
+        "fp32_math_mode": {"type": "object"}
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "required": ["host", "driver", "software", "gpus", "compute_processes_at_start"],
+      "properties": {
+        "host": {"type": "object", "required": ["provider", "hostname", "cpu_model", "mem_total_bytes"]},
+        "driver": {"type": "object", "required": ["driver_version", "cuda_driver_api_version"]},
+        "software": {"type": "object", "required": ["torch", "torch_cuda", "cudnn"]},
+        "gpus": {
+          "type": "array",
+          "items": {"type": "object", "required": ["index", "name", "uuid", "serial", "ecc_mode", "mig_mode", "power_limit_w"]}
+        },
+        "compute_processes_at_start": {"type": "array"}
+      }
+    },
+    "results": {
+      "type": "object",
+      "required": ["per_gpu", "all_gpu"],
+      "properties": {
+        "per_gpu": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["index", "nvidia_smi_index", "uuid", "match", "torch_name", "compute_capability", "metrics", "skipped"],
+            "properties": {
+              "match": {"enum": ["uuid", "pci_order"]},
+              "metrics": {"$ref": "#/$defs/metrics"},
+              "skipped": {"type": "object", "additionalProperties": {"type": "string"}}
+            }
+          }
+        },
+        "all_gpu": {
+          "oneOf": [
+            {"type": "object", "required": ["status", "reason"], "properties": {"status": {"const": "skipped"}}},
+            {"type": "object", "required": ["status", "gpus", "metrics", "per_gpu_medians", "skipped"],
+             "properties": {"status": {"const": "ran"}, "metrics": {"$ref": "#/$defs/metrics"}}}
+          ]
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "required": ["source", "interval_ms", "phases", "samples", "sampler_errors"],
+      "properties": {
+        "phases": {
+          "type": "array",
+          "items": {"type": "object", "required": ["name", "gpus", "start", "end", "summary"]}
+        },
+        "samples": {"type": "array", "items": {"type": "object", "required": ["t", "index"]}}
+      }
+    },
+    "not_implemented": {
+      "type": "array",
+      "items": {"type": "object", "required": ["name", "reason"]}
+    },
+    "errors": {"type": "array"}
+  }
+}
