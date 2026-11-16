@@ -93,18 +93,15 @@ def check_gpu(gpu: dict, health_row: dict | None, procs: list[dict]) -> list[dic
     u = gpu.get("uuid")
     out = []
 
-    # PCIe link generation drops at idle to save power, so a gen below max on
-    # an idle GPU is normal. Width is not power-managed the same way.
-    gc, gm = gpu.get("pcie_gen_current"), gpu.get("pcie_gen_max")
-    out.append(_finding("pcie_gen", u, "not_checked", {"current": gc, "max": gm}, "current == max under load",
-                        "the link generation drops at idle; judging it needs a reading taken during a transfer"))
-    wc, wm = _int(gpu.get("pcie_width_current")), _int(gpu.get("pcie_width_max"))
-    if wc is None or wm is None:
-        out.append(_finding("pcie_width", u, "unavailable", {"current": wc, "max": wm}, "current == max",
-                            "nvidia-smi reported no PCIe width"))
-    else:
-        out.append(_finding("pcie_width", u, "ok" if wc == wm else "flag", {"current": wc, "max": wm},
-                            "current == max", "a narrower link than the slot supports cuts host transfer bandwidth"))
+    # Link generation and width both drop at idle to save power: a DGX Spark
+    # (GB10, driver 580.173.02) reported gen 1 of 1 and width x1 of x16 while
+    # idle. Judging either needs a reading taken during a host transfer.
+    for check, cur, mx in (("pcie_gen", "pcie_gen_current", "pcie_gen_max"),
+                           ("pcie_width", "pcie_width_current", "pcie_width_max")):
+        out.append(_finding(check, u, "not_checked", {"current": gpu.get(cur), "max": gpu.get(mx)},
+                            "current == max during a host transfer",
+                            "the link drops speed and width at idle; judging it needs a reading taken "
+                            "during a transfer"))
 
     pl, pd = gpu.get("power_limit_w"), gpu.get("power_default_limit_w")
     if pl is None or pd is None:

@@ -30,13 +30,13 @@ def _by_check(findings):
 def test_healthy_gpu_has_no_flags():
     f = _by_check(health.check_gpu(_gpu(), _row(), []))
     assert {k for k, v in f.items() if v["status"] == "flag"} == set()
-    # idle gen 1 of 4 is power management, not a fault
+    # an idle link at gen 1 of 4 or x1 of x16 is power management, not a fault
     assert f["pcie_gen"]["status"] == "not_checked"
+    assert f["pcie_width"]["status"] == "not_checked"
     assert f["memory_errors"]["status"] == "ok"
 
 
 @pytest.mark.parametrize("gpu_kw,row_kw,check", [
-    ({"pcie_width_current": "8"}, {}, "pcie_width"),
     ({"power_limit_w": "300.00"}, {}, "power_limit"),
     ({"ecc_mode": "Disabled"}, {}, "ecc_mode"),
     ({"mig_mode": "Enabled"}, {}, "mig_mode"),
