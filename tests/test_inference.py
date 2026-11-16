@@ -57,6 +57,7 @@ def test_log_evidence_keeps_lines_and_kv_size():
     ev = inference.log_evidence(log)
     assert ev["kv_cache_gib"] == 57.83
     assert len(ev["lines"]) == 2
+    assert ev["tail"][-1] == "noise"
 
 
 def test_inference_params_command(capsys):

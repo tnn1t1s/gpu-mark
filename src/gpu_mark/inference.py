@@ -107,10 +107,15 @@ def extract_bench(raw: dict) -> tuple[dict, list[str]]:
     return out, missing
 
 
+LOG_TAIL_LINES = 40  # last lines of the server log kept, so a startup failure keeps its final exception
+
+
 def log_evidence(log_text: str) -> dict:
-    lines = [ln.strip() for ln in log_text.splitlines() if LOG_EVIDENCE.search(ln)]
+    all_lines = log_text.splitlines()
+    lines = [ln.strip() for ln in all_lines if LOG_EVIDENCE.search(ln)]
     m = KV_GIB.findall(log_text)
-    return {"kv_cache_gib": float(m[-1]) if m else None, "lines": lines[:60]}
+    return {"kv_cache_gib": float(m[-1]) if m else None, "lines": lines[:60],
+            "tail": all_lines[-LOG_TAIL_LINES:]}
 
 
 class Server:
